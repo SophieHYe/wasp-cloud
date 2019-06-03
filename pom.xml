@@ -43,7 +43,7 @@
 				<configuration>
 					<archive>
 						<manifest>
-							<mainClass>fr.inria.sacha.remining.coming.analyzer.Main</mainClass>
+							<mainClass>test.Run</mainClass>
 						</manifest>
 					</archive>
 					<descriptorRefs>
