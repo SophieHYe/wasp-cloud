@@ -1,8 +1,16 @@
 # wasp-cloud
 wasp cloud assignment
 
+This github evaluates to use Spark on the GoogleCloud  for  improving  the  performance  of  matrix  computations comparing with running computations on local machine. 
 
-#Run on dataproc:
+## Compile:
+
+```
+mvn clean install
+mvn package
+```
+
+## Run on dataproc:
 ```    
 gcloud dataproc jobs submit spark \
     --cluster $CLUSTER_NAME$ \
