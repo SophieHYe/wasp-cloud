@@ -20,10 +20,14 @@ import org.apache.spark.ml.linalg.DenseMatrix;
 import org.apache.spark.ml.linalg.Matrices;
 import org.apache.spark.mllib.linalg.Vectors;
 import org.apache.spark.mllib.linalg.distributed.BlockMatrix;
+import org.apache.spark.mllib.linalg.distributed.CoordinateMatrix;
+import org.apache.spark.mllib.linalg.distributed.GridPartitioner;
 import org.apache.spark.mllib.linalg.distributed.IndexedRow;
 import org.apache.spark.mllib.linalg.distributed.IndexedRowMatrix;
+import org.apache.spark.mllib.linalg.distributed.MatrixEntry;
 import org.apache.spark.mllib.linalg.distributed.RowMatrix;
 import org.apache.spark.mllib.util.MLUtils;
+import org.apache.spark.rdd.RDD;
 
 import scala.Tuple3;
 import scala.collection.Iterable;
@@ -37,18 +41,21 @@ import org.apache.spark.mllib.linalg.Vector;
 public class Run {
 
 	public static void main(String[] args) throws IOException {
-//		SparkConf sparkConf = new SparkConf().setAppName("wasp-cloud");
-		SparkConf sparkConf = new SparkConf().setAppName("wasp-cloud").setMaster("local");
-		JavaSparkContext jpc = new JavaSparkContext(sparkConf);
-		Long start = System.currentTimeMillis();
-
-		double[] densefile = new Run().readfile();
-		DenseMatrix dm = (DenseMatrix) Matrices.dense(1138, 3411, densefile);
-		//create random dense matrix	
-//		Random rand = new Random(100);
-//		DenseMatrix dm = (DenseMatrix) Matrices.rand(5000,5000,rand);
 		
-		JavaRDD<IndexedRow> rows = jpc.parallelize(Arrays.asList(dm.toArray())).map(f -> {
+		//Configuration for the cluster running
+		SparkConf sparkConf = new SparkConf().setAppName("wasp-cloud");
+		//Configuration for the local running
+		//SparkConf sparkConf = new SparkConf().setAppName("wasp-cloud").setMaster("local[2]");	
+		
+		JavaSparkContext jpc = new JavaSparkContext(sparkConf);
+						
+		double[] densefile = new Run().readfile();
+		DenseMatrix dm = (DenseMatrix) Matrices.dense(4350, 4350, densefile);
+		
+		Long start = System.currentTimeMillis();
+		
+		
+		JavaRDD<IndexedRow> rows = jpc.parallelize(Arrays.asList(dm.toArray()),24).map(f -> {
 			long key = new Double(f[0]).longValue();
 			double[] value = new double[f.length - 1];
 			for (int i = 1; i < f.length; i++) {
@@ -56,50 +63,42 @@ public class Run {
 			}
 			return new IndexedRow(key, Vectors.dense(value));
 		});
-
+		
+		
 		IndexedRowMatrix indexrowmatrix = new IndexedRowMatrix(rows.rdd());
-
-		// method 1: SVD
+		System.out.println("indexrowmatrix.numRows():"+indexrowmatrix.numRows());
+		System.out.println("indexrowmatrix.numCols():"+indexrowmatrix.numCols());	
+		
+		//method 1: SVD
 		SingularValueDecomposition svdcomput = indexrowmatrix.computeSVD(10, true, 0.1);
 		System.out.println(svdcomput.s());
 		Long end = System.currentTimeMillis();
-		Long executiontime = (end - start) / 1000;
-		System.out.println(executiontime);
-
+		System.out.println((end-start)/1000);
+		
+		//method 2: BlockMatrix multiple the transpose of itself
+		BlockMatrix blockMatrix = indexrowmatrix.toBlockMatrix();
+		BlockMatrix other = blockMatrix.add(blockMatrix) ;
+		blockMatrix.multiply(other.transpose());	
+	
 	}
 
 	public  double[] readfile() throws IOException {
 		
-		InputStream in = this.getClass().getResourceAsStream("/files/row1138.csv");
-		
-		System.out.println("*******Reading the dense matrix files******");
-		String lines = "";
+		InputStream in = this.getClass().getResourceAsStream("/files/matrix.csv");		
+		System.out.println("*******Reading the matrix files******");
 		BufferedReader br = new BufferedReader(new InputStreamReader(in));
-
+		double[] darray = new double[18922500];
 		String st;
+		int count = 0;
 		while ((st = br.readLine()) != null) {
-			lines += st;
+			String[] columns = st.split(",");
+			for(int i=0;i<4350;i++) {
+				double dv = Double.parseDouble(columns[i]);
+				int index= count*4350+i;
+				darray[index]=dv;
+			}			
+			count +=1;
 		}		
-		lines.replace("\n", ",");
-		lines.replace("\r", ",");		
-		Long l = (long) lines.length();
-		
-		System.out.println("strings~~~~~:" + l);
-		String[] values = lines.split(",");
-
-		System.out.println("The values~~~~~:" + values.length);
-		double[] darray = new double[values.length];
-
-		for (int i = 0; i < values.length; i++) {
-			if(null!=values[i]&&""!=values[i]) {
-				String[] p = values[i].split(".");
-				if(p.length==2) {
-			double dv = Double.parseDouble(values[i]);	
-				
-			darray[i] = dv;
-			}
-			}
-		}
 		return darray;
 	}
 
